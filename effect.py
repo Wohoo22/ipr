@@ -96,15 +96,7 @@ def draw_rainbow_effect(frame, x, y):
 
 
         # Vẽ các cung cầu vồng theo vị trí ngón tay
-        # cv2.arcLine(frame, (x, y), (x + offset_x, y + offset_y), color, 10)
-
-        center = (x, y)
-        axes = (abs(offset_x), abs(offset_y))  # size of the arc
-        angle = 0  # rotation of the ellipse
-        startAngle = 0
-        endAngle = 90  # adjust based on desired curve
-        cv2.ellipse(frame, center, axes, angle, startAngle, endAngle, color, 10)
-
+        cv2.arcLine(frame, (x, y), (x + offset_x, y + offset_y), color, 10)
 
 
 def get_rainbow_color(index):
