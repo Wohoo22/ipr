@@ -74,29 +74,38 @@ def draw_moving_light_effect(frame, x, y):
 
 
 
+def get_rainbow_color(i):
+    """Trả về một màu trong cầu vồng dựa trên chỉ số."""
+    rainbow_colors = [
+        (255, 0, 0),      # Red
+        (255, 127, 0),    # Orange
+        (255, 255, 0),    # Yellow
+        (0, 255, 0),      # Green
+        (0, 0, 255),      # Blue
+        (75, 0, 130),     # Indigo
+        (148, 0, 211)     # Violet
+    ]
+    return rainbow_colors[i % len(rainbow_colors)]
 
 
 
 def draw_rainbow_effect(frame, x, y):
     """Tạo hiệu ứng cầu vồng cong theo vị trí ngón tay."""
-    num_colors = 7  # Số màu cầu vồng
-    radius = 100  # Bán kính của cầu vồng
-    angle_step = np.pi / 10  # Các bước góc để tạo độ cong cho cầu vồng
+    num_colors = 7      # Số màu cầu vồng
+    base_radius = 60    # Bán kính cơ bản
+    thickness = 10      # Độ dày của mỗi cung
 
-
-    # Vẽ các cung cầu vồng với các màu khác nhau
     for i in range(num_colors):
         color = get_rainbow_color(i)
-        angle = angle_step * i
+        radius = base_radius + i * thickness
 
+        center = (x, y)
+        axes = (radius, radius // 2)  # Dạng ellipse để tạo độ cong
+        angle = 0                     # Không xoay
+        start_angle = 0
+        end_angle = 180               # Nửa vòng để tạo hiệu ứng cong
 
-        # Tính toán vị trí các điểm trên đường cong cầu vồng
-        offset_x = int(radius * np.cos(angle))
-        offset_y = int(radius * np.sin(angle))
-
-
-        # Vẽ các cung cầu vồng theo vị trí ngón tay
-        cv2.arcLine(frame, (x, y), (x + offset_x, y + offset_y), color, 10)
+        cv2.ellipse(frame, center, axes, angle, start_angle, end_angle, color, thickness)
 
 
 def get_rainbow_color(index):
