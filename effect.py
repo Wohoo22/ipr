@@ -1,19 +1,75 @@
 import cv2
 import numpy as np
+import time
+import random
 
+def current_milli_time():
+    return round(time.time() * 1000)
 
-def draw_explosion_effect(frame, x, y):
+def draw_explosion_effect(frame, x, y, last_time_hand_open_after_close):
     """Tạo hiệu ứng nổ khi ngón tay vẫy hoặc nắm tay."""
-    num_particles = 30
+    def more_explosion():
+        second_since_last = (current_milli_time() - last_time_hand_open_after_close) / 1000
+        return second_since_last < 1.5
+
+    is_more_explosion = more_explosion()
+    num_particles = 100 if is_more_explosion else 30
     for _ in range(num_particles):
-        offset_x = np.random.randint(-30, 30)
-        offset_y = np.random.randint(-30, 30)
+        offset_x = np.random.randint(-num_particles, num_particles)
+        offset_y = np.random.randint(-num_particles, num_particles)
         radius = np.random.randint(5, 15)
         color = (np.random.randint(200, 255), np.random.randint(100, 150), np.random.randint(0, 50))  # Tia lửa
+        if is_more_explosion:
+            color = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255)) 
         cv2.circle(frame, (x + offset_x, y + offset_y), radius, color, -1)
 
 
-def draw_snow_effect(frame, x, y):
+class Snowflake:
+    def __init__(self, width, height):
+        self.x = random.randint(0, width)
+        self.y = random.randint(0, height)
+        self.size = random.randint(2, 5)
+        self.speed = random.uniform(1, 3)
+        self.wind = random.uniform(-1, 1)
+
+    def update(self, width, height):
+        self.y += self.speed
+        self.x += self.wind
+
+        # Nếu rơi xuống dưới màn hình thì reset lại phía trên
+        if self.y > height:
+            self.y = random.uniform(-10, -5)
+            self.x = random.randint(0, width)
+            self.speed = random.uniform(1, 3)
+            self.wind = random.uniform(-1, 1)
+
+    def draw(self, frame):
+        cv2.circle(frame, (int(self.x), int(self.y)), self.size, (255, 255, 255), -1)
+
+class SnowEffect:
+    def __init__(self, width, height, num_snowflakes=100):
+        self.width = width
+        self.height = height
+        self.snowflakes = [Snowflake(width, height) for _ in range(num_snowflakes)]
+
+    def update_and_draw(self, frame):
+        for flake in self.snowflakes:
+            flake.update(self.width, self.height)
+            flake.draw(frame)
+
+
+def draw_snow_effect(frame, x, y, last_time_index_finger_spin):
+    def snow_rain():
+        second_since_last = (current_milli_time() - last_time_index_finger_spin) / 1000
+        return second_since_last < 1.5
+    
+    is_snow_rain = snow_rain()
+
+    if is_snow_rain:
+        h, w = frame.shape[:2]
+        snow = SnowEffect(w, h, num_snowflakes=120)
+        snow.update_and_draw(frame)
+
     """Tạo hiệu ứng bão tuyết xung quanh ngón tay."""
     num_snowflakes = 50
     for _ in range(num_snowflakes):
@@ -24,17 +80,22 @@ def draw_snow_effect(frame, x, y):
         cv2.circle(frame, (x + offset_x, y + offset_y), size, color, -1)
 
 
-def draw_sparkle_effect(frame, x, y):
+def draw_sparkle_effect(frame, x, y, index_finger_history):
     """Tạo hiệu ứng nhấp nháy ánh sáng (Sparkle)."""
-    num_sparkles = 10
-    for _ in range(num_sparkles):
-        offset_x = np.random.randint(-30, 30)
-        offset_y = np.random.randint(-30, 30)
-        sparkle_x = x + offset_x
-        sparkle_y = y + offset_y
-        color = (np.random.randint(200, 255), np.random.randint(200, 255), np.random.randint(200, 255))  # Màu sắc ngẫu nhiên
-        radius = np.random.randint(3, 6)  # Kích thước điểm sáng
-        cv2.circle(frame, (sparkle_x, sparkle_y), radius, color, -1)
+    def draw_sparkles(x, y, num_sparkles):
+        for _ in range(num_sparkles):
+            offset_x = np.random.randint(-30, 30)
+            offset_y = np.random.randint(-30, 30)
+            sparkle_x = x + offset_x
+            sparkle_y = y + offset_y
+            color = (np.random.randint(200, 255), np.random.randint(200, 255), np.random.randint(200, 255))  # Màu sắc ngẫu nhiên
+            radius = np.random.randint(3, 6)  # Kích thước điểm sáng
+            cv2.circle(frame, (sparkle_x, sparkle_y), radius, color, -1)
+    draw_sparkles(x, y, 10)
+    for item in reversed(index_finger_history):
+        draw_sparkles(item[0], item[1], 5)
+
+
 
 
 def draw_heart_effect(frame, x, y, heart_image):
@@ -89,23 +150,49 @@ def get_rainbow_color(i):
 
 
 
-def draw_rainbow_effect(frame, x, y):
-    """Tạo hiệu ứng cầu vồng cong theo vị trí ngón tay."""
-    num_colors = 7      # Số màu cầu vồng
-    base_radius = 60    # Bán kính cơ bản
-    thickness = 10      # Độ dày của mỗi cung
+# def draw_rainbow_effect(frame, x, y, wrist_z):
+#     """Tạo hiệu ứng cầu vồng cong theo vị trí ngón tay."""
+#     num_colors = 7      # Số màu cầu vồng
+#     base_radius = 60    # Bán kính cơ bản
+#     thickness = 10      # Độ dày của mỗi cung
+
+#     for i in range(num_colors):
+#         color = get_rainbow_color(i)
+#         radius = base_radius + i * thickness
+
+#         center = (x, y)
+#         axes = (radius, radius // 2)  # Dạng ellipse để tạo độ cong
+#         angle = 0                     # Không xoay
+#         start_angle = 180
+#         end_angle = 360               # Nửa vòng để tạo hiệu ứng cong
+
+#         cv2.ellipse(frame, center, axes, angle, start_angle, end_angle, color, thickness)
+
+def draw_rainbow_effect(frame, x, y, hand_size):
+    """Vẽ cầu vồng với kích thước thay đổi theo độ gần của cổ tay (wrist_z)."""
+    num_colors = 7
+    base_radius = 60
+    thickness = 10
+
+    # Scale cầu vồng: càng gần (wrist_z nhỏ) thì càng to
+    scale = max(0.5, 0.025 * hand_size)  # scale nằm trong khoảng 0.5x → 2.5x
 
     for i in range(num_colors):
         color = get_rainbow_color(i)
-        radius = base_radius + i * thickness
+        
+        radius = int((base_radius + i * thickness) * scale)
+        axes = (radius, int(radius * 0.5))  # Dạng ellipse theo tỉ lệ
 
         center = (x, y)
-        axes = (radius, radius // 2)  # Dạng ellipse để tạo độ cong
-        angle = 0                     # Không xoay
-        start_angle = 0
-        end_angle = 180               # Nửa vòng để tạo hiệu ứng cong
+        angle = 0
+        start_angle = 180
+        end_angle = 360
 
-        cv2.ellipse(frame, center, axes, angle, start_angle, end_angle, color, thickness)
+        # Tăng độ dày cũng theo scale (giữ được độ đậm đều)
+        line_thickness = max(1, int(thickness * scale * 0.7))
+
+        cv2.ellipse(frame, center, axes, angle, start_angle, end_angle, color, line_thickness)
+
 
 
 def get_rainbow_color(index):
