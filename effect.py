@@ -6,23 +6,79 @@ import random
 def current_milli_time():
     return round(time.time() * 1000)
 
+# Load the explosion icon once globally (with alpha channel)
+explosion_icon = cv2.imread("explosion_icon.png", cv2.IMREAD_UNCHANGED)
+
+# Global particle list
+explosion_particles = []
+
+class ExplosionParticle:
+    def __init__(self, x, y, is_more):
+        size = 90 if is_more else 30
+        self.x = x + np.random.randint(-size, size)
+        self.y = y + np.random.randint(-size, size)
+        self.size = np.random.uniform(0.3, 0.6)
+        self.birth_time = current_milli_time()
+        self.lifetime = np.random.randint(500, 1500)  # milliseconds
+
+    def age(self):
+        return current_milli_time() - self.birth_time
+
+    def is_alive(self):
+        return self.age() < self.lifetime
+
+    def draw(self, frame):
+        age_ratio = self.age() / self.lifetime
+        scale = 1 + age_ratio * 1.5  # increase size as it ages
+        alpha = max(1.0 - age_ratio, 0)
+
+        resized_icon = cv2.resize(
+            explosion_icon, 
+            (0, 0), 
+            fx=self.size * scale, 
+            fy=self.size * scale, 
+            interpolation=cv2.INTER_AREA
+        )
+
+        icon_h, icon_w = resized_icon.shape[:2]
+        x1 = int(self.x - icon_w // 2)
+        y1 = int(self.y - icon_h // 2)
+
+        # Ensure bounds
+        if x1 < 0 or y1 < 0 or x1 + icon_w > frame.shape[1] or y1 + icon_h > frame.shape[0]:
+            return
+
+        # Separate alpha channel and color
+        icon_rgb = resized_icon[:, :, :3]
+        icon_alpha = resized_icon[:, :, 3] / 255.0 * alpha
+
+        for c in range(3):
+            frame[y1:y1+icon_h, x1:x1+icon_w, c] = (
+                icon_alpha * icon_rgb[:, :, c] +
+                (1 - icon_alpha) * frame[y1:y1+icon_h, x1:x1+icon_w, c]
+            ).astype(np.uint8)
+
 def draw_explosion_effect(frame, x, y, last_time_hand_open_after_close):
-    """Tạo hiệu ứng nổ khi ngón tay vẫy hoặc nắm tay."""
     def more_explosion():
         second_since_last = (current_milli_time() - last_time_hand_open_after_close) / 1000
         return second_since_last < 1.5
 
-    is_more_explosion = more_explosion()
-    num_particles = 100 if is_more_explosion else 30
-    for _ in range(num_particles):
-        offset_x = np.random.randint(-num_particles, num_particles)
-        offset_y = np.random.randint(-num_particles, num_particles)
-        radius = np.random.randint(5, 15)
-        color = (np.random.randint(200, 255), np.random.randint(100, 150), np.random.randint(0, 50))  # Tia lửa
-        if is_more_explosion:
-            color = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255)) 
-        cv2.circle(frame, (x + offset_x, y + offset_y), radius, color, -1)
+    global explosion_particles
+    is_more = more_explosion()
+    num_new_particles = 15 if is_more else 3
 
+    # Add new particles
+    for _ in range(num_new_particles):
+        explosion_particles.append(ExplosionParticle(x, y, is_more))
+
+    # Draw and keep alive particles
+    alive_particles = []
+    for particle in explosion_particles:
+        if particle.is_alive():
+            particle.draw(frame)
+            alive_particles.append(particle)
+
+    explosion_particles = alive_particles  # Update list
 
 class Snowflake:
     def __init__(self, width, height):
