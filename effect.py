@@ -3,6 +3,7 @@ import numpy as np
 import time
 import random
 import math
+import os
 
 def current_milli_time():
     return round(time.time() * 1000)
@@ -191,23 +192,58 @@ def draw_snow_effect(frame, x, y, last_time_index_finger_spin):
                     (1 - icon_alpha) * frame[y1:y1+ih, x1:x1+iw, c]
                 ).astype(np.uint8)
 
+# Load sparkle images once
+sparkle_images = [
+    cv2.imread(os.path.join("sparkles", f), cv2.IMREAD_UNCHANGED)
+    for f in os.listdir("sparkles")
+    if f.endswith(".png")
+]
+
+def overlay_image_alpha(img, img_overlay, x, y, alpha_mask):
+    """Overlay `img_overlay` onto `img` at (x, y) with alpha mask."""
+    h, w = img_overlay.shape[:2]
+    if x < 0 or y < 0 or x + w > img.shape[1] or y + h > img.shape[0]:
+        return  # skip if out of bounds
+
+    roi = img[y:y+h, x:x+w]
+    alpha = alpha_mask.astype(float) / 255
+    for c in range(3):
+        roi[..., c] = roi[..., c] * (1 - alpha) + img_overlay[..., c] * alpha
+
+    img[y:y+h, x:x+w] = roi
+
 def draw_sparkle_effect(frame, x, y, index_finger_history):
-    """Tạo hiệu ứng nhấp nháy ánh sáng (Sparkle)."""
-    def draw_sparkles(x, y, num_sparkles):
+    """Vẽ hiệu ứng sparkle dùng ảnh với nhấp nháy và kích thước ngẫu nhiên."""
+
+    def draw_sparkles(px, py, num_sparkles):
         for _ in range(num_sparkles):
-            offset_x = np.random.randint(-30, 30)
-            offset_y = np.random.randint(-30, 30)
-            sparkle_x = x + offset_x
-            sparkle_y = y + offset_y
-            color = (np.random.randint(200, 255), np.random.randint(200, 255), np.random.randint(200, 255))  # Màu sắc ngẫu nhiên
-            radius = np.random.randint(3, 6)  # Kích thước điểm sáng
-            cv2.circle(frame, (sparkle_x, sparkle_y), radius, color, -1)
-    draw_sparkles(x, y, 10)
-    for item in reversed(index_finger_history):
-        draw_sparkles(item[0], item[1], 5)
+            if not sparkle_images:
+                continue
 
+            sparkle = random.choice(sparkle_images)
 
+            # Resize random
+            scale = random.uniform(0.2, 0.6)
+            new_w = int(sparkle.shape[1] * scale)
+            new_h = int(sparkle.shape[0] * scale)
+            sparkle_resized = cv2.resize(sparkle, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
+            # Random transparency (blink effect)
+            alpha = sparkle_resized[..., 3]
+            blink_factor = random.uniform(0.2, 1.0)
+            alpha = (alpha * blink_factor).astype(np.uint8)
+
+            # Position
+            offset_x = random.randint(-30, 30)
+            offset_y = random.randint(-30, 30)
+            pos_x = int(px + offset_x)
+            pos_y = int(py + offset_y)
+
+            overlay_image_alpha(frame, sparkle_resized, pos_x, pos_y, alpha)
+
+    draw_sparkles(x, y, 5)
+    for hx, hy in reversed(index_finger_history):
+        draw_sparkles(hx, hy, 2)
 
 def draw_heart_effect(frame, x, y, heart_image):
     """Chèn sticker trái tim nhỏ vào vị trí (x, y)."""
