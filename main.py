@@ -4,6 +4,7 @@ from effect import draw_explosion_effect, draw_snow_effect, draw_sparkle_effect,
 import time
 from collections import deque
 import numpy as np
+import math
 
 def current_milli_time():
     return round(time.time() * 1000)
@@ -29,7 +30,7 @@ heart_image = cv2.imread('heart_sticker.png', cv2.IMREAD_UNCHANGED)  # Đọc �
 # ================ HAND CLOSE OPEN UTILS ==================
 
 is_hand_closed_before = True
-last_time_hand_open_after_close = current_milli_time()
+last_time_hand_open_after_close = 0
 
 def is_hand_open(landmarks):
     finger_tips = [8, 12, 16, 20]  # các đầu ngón trừ ngón cái
@@ -44,58 +45,60 @@ def is_hand_open(landmarks):
 
 # ================ INDEX FINGER DETECT UTILS ==================
 
-index_finger_history = deque(maxlen=30)
-last_time_index_finger_spin = current_milli_time()
+index_finger_history = deque(maxlen=50)
+last_time_index_finger_spin = 0
 
 def is_only_index_raised(hand_landmarks):
     fingers = []
 
-    # Thumb
     if hand_landmarks.landmark[4].x < hand_landmarks.landmark[3].x:
-        fingers.append(1)
+        fingers.append(1)  # Thumb
     else:
         fingers.append(0)
 
-    # Index
-    if hand_landmarks.landmark[8].y < hand_landmarks.landmark[6].y:
-        fingers.append(1)
-    else:
-        fingers.append(0)
-
-    # Middle
-    if hand_landmarks.landmark[12].y < hand_landmarks.landmark[10].y:
-        fingers.append(1)
-    else:
-        fingers.append(0)
-
-    # Ring
-    if hand_landmarks.landmark[16].y < hand_landmarks.landmark[14].y:
-        fingers.append(1)
-    else:
-        fingers.append(0)
-
-    # Pinky
-    if hand_landmarks.landmark[20].y < hand_landmarks.landmark[18].y:
-        fingers.append(1)
-    else:
-        fingers.append(0)
+    fingers.append(int(hand_landmarks.landmark[8].y < hand_landmarks.landmark[6].y))   # Index
+    fingers.append(int(hand_landmarks.landmark[12].y < hand_landmarks.landmark[10].y)) # Middle
+    fingers.append(int(hand_landmarks.landmark[16].y < hand_landmarks.landmark[14].y)) # Ring
+    fingers.append(int(hand_landmarks.landmark[20].y < hand_landmarks.landmark[18].y)) # Pinky
 
     return fingers == [0, 1, 0, 0, 0]
 
+def calculate_angle(p1, p2, center):
+    """Tính góc (radian) từ center đến p1 và p2"""
+    v1 = p1 - center
+    v2 = p2 - center
+    angle = math.atan2(v2[1], v2[0]) - math.atan2(v1[1], v1[0])
+    angle = (angle + math.pi * 2) % (math.pi * 2)  # Normalize to [0, 2π]
+    return angle
+
 def detect_circular_motion(history):
-    if len(history) < 10:
+    if len(history) < 40:
         return False
 
-    # Tính khoảng cách từ các điểm tới trung bình trọng tâm
     points = np.array(history)
     center = np.mean(points, axis=0)
-    distances = np.linalg.norm(points - center, axis=1)
 
-    # Nếu tất cả điểm nằm gần đường tròn => có chuyển động hình tròn
-    if np.std(distances) < 20:
-        return True
+    total_angle = 0
+    direction_consistency = 0
+    last_angle = None
 
-    return False
+    for i in range(1, len(points)):
+        angle = calculate_angle(points[i-1], points[i], center)
+
+        if last_angle is not None:
+            delta = angle
+            if delta > math.pi:
+                delta -= 2 * math.pi
+            direction_consistency += delta
+            total_angle += abs(delta)
+        last_angle = angle
+
+    # Convert total angular movement to degrees
+    total_angle_degrees = total_angle * 180 / math.pi
+    consistency_degrees = abs(direction_consistency) * 180 / math.pi
+
+    # Criteria: moved at least ~270° and not reversing direction frequently
+    return total_angle_degrees > 270 and consistency_degrees > 200
 
 # ================ INDEX FINGER STORE UTILS FOR SPARKLES EFFECT ==================
 
@@ -159,18 +162,15 @@ while cap.isOpened():
                 last_time_hand_open_after_close = current_milli_time()
 
             # ==================== DETECT INDEX FINGER SPIN ===============================
-
             if is_only_index_raised(hand_landmarks):
-                    # Lưu vị trí đầu ngón trỏ
-                    x = int(hand_landmarks.landmark[8].x * frame.shape[1])
-                    y = int(hand_landmarks.landmark[8].y * frame.shape[0])
-                    index_finger_history.append([x, y])
+                index_tip = hand_landmarks.landmark[8]
+                index_finger_history.append(np.array([index_tip.x, index_tip.y]))
 
-                    if detect_circular_motion(index_finger_history):
-                        last_time_index_finger_spin = current_milli_time()
+                if detect_circular_motion(index_finger_history):
+                    last_time_index_finger_spin = current_milli_time()
+                    index_finger_history.clear()
             else:
                 index_finger_history.clear()
-
             # ==================== STORE INDEX FINGER HISTORY FOR SPARKLES EFFECT ===============================
 
             index_finger_history_for_sparkles.append([x, y])

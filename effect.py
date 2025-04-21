@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import time
 import random
+import math
 
 def current_milli_time():
     return round(time.time() * 1000)
@@ -80,61 +81,115 @@ def draw_explosion_effect(frame, x, y, last_time_hand_open_after_close):
 
     explosion_particles = alive_particles  # Update list
 
-class Snowflake:
+# Load snowflake icon with alpha channel
+snowflake_icon = cv2.imread("snowflake_icon.png", cv2.IMREAD_UNCHANGED)
+
+class RealisticSnowflake:
     def __init__(self, width, height):
         self.x = random.randint(0, width)
         self.y = random.randint(0, height)
-        self.size = random.randint(2, 5)
-        self.speed = random.uniform(1, 3)
-        self.wind = random.uniform(-1, 1)
+        self.size_scale = random.uniform(0.3, 0.8)
+        self.speed = random.uniform(1, 2)
+        self.wind = random.uniform(-0.5, 0.5)
+        self.angle = random.uniform(0, 360)
+        self.spin_speed = random.uniform(-1, 1)
 
     def update(self, width, height):
         self.y += self.speed
         self.x += self.wind
+        self.angle = (self.angle + self.spin_speed) % 360
 
-        # Nếu rơi xuống dưới màn hình thì reset lại phía trên
+        # Reset if below screen
         if self.y > height:
-            self.y = random.uniform(-10, -5)
+            self.y = random.uniform(-20, -10)
             self.x = random.randint(0, width)
-            self.speed = random.uniform(1, 3)
-            self.wind = random.uniform(-1, 1)
+            self.speed = random.uniform(1, 2)
+            self.wind = random.uniform(-0.5, 0.5)
+            self.angle = random.uniform(0, 360)
 
     def draw(self, frame):
-        cv2.circle(frame, (int(self.x), int(self.y)), self.size, (255, 255, 255), -1)
+        # Resize and rotate the snowflake
+        scaled_icon = cv2.resize(
+            snowflake_icon, 
+            (0, 0), 
+            fx=self.size_scale, 
+            fy=self.size_scale, 
+            interpolation=cv2.INTER_AREA
+        )
 
-class SnowEffect:
+        (h, w) = scaled_icon.shape[:2]
+        center = (w // 2, h // 2)
+
+        # Rotate with transparency
+        M = cv2.getRotationMatrix2D(center, self.angle, 1.0)
+        rotated = cv2.warpAffine(scaled_icon, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0,0))
+
+        x1 = int(self.x - w // 2)
+        y1 = int(self.y - h // 2)
+
+        if x1 < 0 or y1 < 0 or x1 + w > frame.shape[1] or y1 + h > frame.shape[0]:
+            return
+
+        icon_rgb = rotated[:, :, :3]
+        icon_alpha = rotated[:, :, 3] / 255.0
+
+        for c in range(3):
+            frame[y1:y1+h, x1:x1+w, c] = (
+                icon_alpha * icon_rgb[:, :, c] +
+                (1 - icon_alpha) * frame[y1:y1+h, x1:x1+w, c]
+            ).astype(np.uint8)
+
+class RealisticSnowEffect:
     def __init__(self, width, height, num_snowflakes=100):
+        self.snowflakes = [RealisticSnowflake(width, height) for _ in range(num_snowflakes)]
         self.width = width
         self.height = height
-        self.snowflakes = [Snowflake(width, height) for _ in range(num_snowflakes)]
 
     def update_and_draw(self, frame):
         for flake in self.snowflakes:
             flake.update(self.width, self.height)
             flake.draw(frame)
 
+# Initialize globally once
+realistic_snow = None
 
 def draw_snow_effect(frame, x, y, last_time_index_finger_spin):
+    global realistic_snow
+
     def snow_rain():
-        second_since_last = (current_milli_time() - last_time_index_finger_spin) / 1000
-        return second_since_last < 1.5
-    
-    is_snow_rain = snow_rain()
+        return (current_milli_time() - last_time_index_finger_spin) / 1000 < 1
 
-    if is_snow_rain:
-        h, w = frame.shape[:2]
-        snow = SnowEffect(w, h, num_snowflakes=120)
-        snow.update_and_draw(frame)
+    h, w = frame.shape[:2]
+    if realistic_snow is None:
+        realistic_snow = RealisticSnowEffect(w, h, num_snowflakes=100)
 
-    """Tạo hiệu ứng bão tuyết xung quanh ngón tay."""
-    num_snowflakes = 50
-    for _ in range(num_snowflakes):
+    if snow_rain():
+        realistic_snow.update_and_draw(frame)
+
+    # Local snow burst around finger
+    for _ in range(30):
         offset_x = np.random.randint(-40, 40)
         offset_y = np.random.randint(-40, 40)
-        size = np.random.randint(2, 6)
-        color = (255, 255, 255)  # Màu trắng tuyết
-        cv2.circle(frame, (x + offset_x, y + offset_y), size, color, -1)
+        scale = np.random.uniform(0.2, 0.6)
+        angle = np.random.uniform(0, 360)
 
+        icon = cv2.resize(snowflake_icon, (0, 0), fx=scale, fy=scale)
+        (ih, iw) = icon.shape[:2]
+        center = (iw // 2, ih // 2)
+        M = cv2.getRotationMatrix2D(center, angle, 1.0)
+        rotated = cv2.warpAffine(icon, M, (iw, ih), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(0,0,0,0))
+
+        x1 = int(x + offset_x - iw // 2)
+        y1 = int(y + offset_y - ih // 2)
+
+        if 0 <= x1 <= w - iw and 0 <= y1 <= h - ih:
+            icon_rgb = rotated[:, :, :3]
+            icon_alpha = rotated[:, :, 3] / 255.0
+            for c in range(3):
+                frame[y1:y1+ih, x1:x1+iw, c] = (
+                    icon_alpha * icon_rgb[:, :, c] +
+                    (1 - icon_alpha) * frame[y1:y1+ih, x1:x1+iw, c]
+                ).astype(np.uint8)
 
 def draw_sparkle_effect(frame, x, y, index_finger_history):
     """Tạo hiệu ứng nhấp nháy ánh sáng (Sparkle)."""
