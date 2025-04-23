@@ -72,7 +72,7 @@ def calculate_angle(p1, p2, center):
     return angle
 
 def detect_circular_motion(history):
-    if len(history) < 40:
+    if len(history) < 20:
         return False
 
     points = np.array(history)
@@ -138,10 +138,6 @@ while cap.isOpened():
 
     if results.multi_hand_landmarks:
         for hand_landmarks in results.multi_hand_landmarks:
-            # Vẽ khung xương bàn tay
-            mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
-
-
             # Lấy tọa độ ngón tay trỏ
             index_finger = hand_landmarks.landmark[8]
             h, w, c = frame.shape
