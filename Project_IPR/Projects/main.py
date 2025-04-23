@@ -81,7 +81,6 @@ class HandMagicApp(QMainWindow):
         self.init_ui()
         self.init_camera()
 
-
     def init_ui(self):
         main_widget = QWidget()
         main_layout = QHBoxLayout()
@@ -289,11 +288,8 @@ class HandMagicApp(QMainWindow):
 
     def keyPressEvent(self, event):
         key = event.key()
-        print(key)
         if Qt.Key_1 <= key <= Qt.Key_9:
             key_str = str(key - Qt.Key_0)
-            print(key_str)
-            print(self.key_bindings)
             if key_str in self.key_bindings:
                 effect_name = self.key_bindings[key_str]
                 self.effect_combo.setCurrentText(effect_name)

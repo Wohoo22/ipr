@@ -209,8 +209,8 @@ while cap.isOpened():
         current_effect_idx = 1
     elif key == ord('3'):  # Phím '3' để chọn hiệu ứng nhấp nháy ánh sáng
         current_effect_idx = 2
-    elif key == ord('4'):  # Phím '4' để chọn hiệu ứng trái tim
-        current_effect_idx = 3
+    # elif key == ord('4'):  # Phím '4' để chọn hiệu ứng trái tim
+    #     current_effect_idx = 3
     elif key == ord('5'):  # Phím '5' để chọn hiệu ứng ánh sáng chuyển động
         current_effect_idx = 4
     elif key == ord('6'):  # Phím '6' để chọn hiệu ứng cầu vồng
